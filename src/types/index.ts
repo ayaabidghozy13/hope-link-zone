@@ -20,6 +20,7 @@ export interface Activity {
   content: string;
   duration?: number; // in minutes for walks, breathing
   order: number;
+  position?: { x: number; y: number }; // for React Flow positioning
 }
 
 export interface Program {
