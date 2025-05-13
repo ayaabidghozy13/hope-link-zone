@@ -1,21 +1,16 @@
 
-import React, { useState, useCallback } from 'react';
-import { 
-  ReactFlow,
-  MiniMap,
-  Controls,
-  Background,
-  useNodesState,
-  useEdgesState,
-  addEdge,
+import React, { useState, useCallback, useMemo } from 'react';
+import ReactFlow, { 
+  Background, 
+  Controls, 
   Node,
   Edge,
-  Connection,
-  ConnectionLineType,
-  NodeTypes
+  useNodesState, 
+  useEdgesState, 
+  MarkerType
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { Program, Activity } from '@/types';
+import { type Activity } from '@/types';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Drawer, DrawerClose, DrawerContent, DrawerFooter, DrawerHeader, DrawerTitle } from '@/components/ui/drawer';
 import { Button } from '@/components/ui/button';
@@ -25,33 +20,87 @@ import ActivityItem from './ActivityItem';
 import VideoActivity from '../activities/VideoActivity';
 import AudioActivity from '../activities/AudioActivity';
 import JournalActivity from '../activities/JournalActivity';
-import WalkActivity from '../activities/WalkActivity';
 import BreathingActivity from '../activities/BreathingActivity';
+import WalkActivity from '../activities/WalkActivity';
 
-interface ProgramFlowViewProps {
-  program: Program;
-  onMarkComplete: (activityId: string) => void;
-}
+// Sample program data (replace with real data from API)
+const sampleProgram = {
+  id: 1,
+  name: "Anxiety Management Program",
+  description: "A comprehensive program to manage anxiety through various techniques",
+  activities: [
+    {
+      id: 1,
+      title: "Introduction to Anxiety Management",
+      type: "video",
+      description: "Learn about the basics of anxiety and how this program will help you manage it.",
+      content: "https://example.com/video1.mp4",
+      completed: false,
+      unlocked: true
+    },
+    {
+      id: 2,
+      title: "Deep Breathing Exercise",
+      type: "breathing",
+      description: "Practice deep breathing techniques to calm your mind and reduce anxiety.",
+      completed: false,
+      unlocked: false
+    },
+    {
+      id: 3,
+      title: "Guided Meditation Audio",
+      type: "audio",
+      description: "Listen to this guided meditation to help center your thoughts and reduce stress.",
+      content: "https://example.com/audio1.mp3",
+      completed: false,
+      unlocked: false
+    },
+    {
+      id: 4,
+      title: "Journal Your Thoughts",
+      type: "journal",
+      description: "Write down your thoughts and feelings about your anxiety triggers.",
+      completed: false,
+      unlocked: false
+    },
+    {
+      id: 5,
+      title: "Mindful Walking",
+      type: "walk",
+      description: "Take a mindful walk outside to clear your mind and connect with nature.",
+      completed: false,
+      unlocked: false
+    }
+  ],
+  edges: [
+    { source: '1', target: '2' },
+    { source: '2', target: '3' },
+    { source: '2', target: '4' },
+    { source: '3', target: '5' },
+    { source: '4', target: '5' }
+  ]
+};
 
-// Custom node component for activities
-const ActivityNode = ({ data }: { data: any }) => {
-  const activity = data.activity;
-  const isLocked = data.isLocked;
-  const isCompleted = activity.completed;
-
+// Custom node component
+const ActivityNode = ({ data }: { data: { activity: Activity, isLocked: boolean, isCompleted: boolean, onClick: () => void } }) => {
+  const { activity, isLocked, isCompleted, onClick } = data;
+  
   return (
     <div 
-      className={`p-3 rounded-md shadow-sm min-w-[180px] border transition-all ${
-        isLocked 
-          ? 'bg-gray-100 border-gray-300 opacity-70 cursor-not-allowed' 
-          : isCompleted
-            ? 'bg-hopelink-accent/20 border-hopelink-accent cursor-default'
-            : 'bg-white border-hopelink-primary/30 hover:border-hopelink-primary cursor-pointer'
-      }`}
+      className={`w-64 p-4 rounded-lg shadow-md hover:shadow-lg transition-all cursor-pointer ${
+        isLocked ? 'bg-gray-100 opacity-70' : 'bg-white hover:scale-105'
+      } ${isCompleted ? 'border-2 border-hopelink-accent' : ''}`}
+      onClick={isLocked ? undefined : onClick}
     >
-      <div className="flex items-center justify-between mb-2">
-        <div className="flex items-center gap-2">
-          {data.icon}
+      <div className="flex justify-between items-start mb-2">
+        <div className="flex items-center">
+          <div className={`w-8 h-8 rounded-full flex items-center justify-center mr-2 ${
+            isLocked ? 'bg-gray-200' : isCompleted ? 'bg-hopelink-accent/20' : 'bg-hopelink-primary/20'
+          }`}>
+            {isLocked ? <Lock size={16} className="text-gray-500" /> : 
+             isCompleted ? <Check size={16} className="text-hopelink-accent" /> : 
+             <Play size={16} className="text-hopelink-primary" />}
+          </div>
           <span className="font-medium text-sm">{activity.title}</span>
         </div>
         <div>
@@ -60,111 +109,114 @@ const ActivityNode = ({ data }: { data: any }) => {
         </div>
       </div>
       <p className="text-xs text-muted-foreground line-clamp-2">{activity.description}</p>
+      {!isLocked && (
+        <div className="mt-3">
+          <span className={`text-xs px-2 py-1 rounded-full ${
+            isCompleted ? 'bg-hopelink-accent/10 text-hopelink-accent' : 'bg-hopelink-primary/10 text-hopelink-primary'
+          }`}>
+            {activity.type}
+          </span>
+        </div>
+      )}
     </div>
   );
 };
 
-const nodeTypes: NodeTypes = {
-  activityNode: ActivityNode,
+const getActivityComponent = (activity: Activity) => {
+  switch (activity.type) {
+    case 'video':
+      return <VideoActivity videoUrl={activity.content || ""} />;
+    case 'audio':
+      return <AudioActivity audioUrl={activity.content || ""} />;
+    case 'journal':
+      return <JournalActivity />;
+    case 'breathing':
+      return <BreathingActivity />;
+    case 'walk':
+      return <WalkActivity />;
+    default:
+      return <div>Activity type not supported</div>;
+  }
 };
 
-const ProgramFlowView = ({ program, onMarkComplete }: ProgramFlowViewProps) => {
-  const [selectedActivity, setSelectedActivity] = useState<Activity | null>(null);
+const ProgramFlowView: React.FC = () => {
   const isMobile = useIsMobile();
-  
-  // Initialize nodes based on activities
-  const initialNodes: Node[] = program.activities.map((activity) => {
-    // Determine if node should be locked
-    const isLocked = activity.order > 1 && 
-      !program.activities.find(a => a.order === activity.order - 1)?.completed;
-    
-    // Get appropriate icon for activity type
-    let icon;
-    switch (activity.type) {
-      case 'video':
-        icon = <Play size={16} className="text-blue-500" />;
-        break;
-      case 'audio':
-        icon = <Play size={16} className="text-purple-500" />;
-        break;
-      case 'journal':
-        icon = <Play size={16} className="text-yellow-500" />;
-        break;
-      case 'walk':
-        icon = <Play size={16} className="text-green-500" />;
-        break;
-      case 'breathing':
-        icon = <Play size={16} className="text-cyan-500" />;
-        break;
-      default:
-        icon = <Play size={16} className="text-hopelink-primary" />;
-    }
-    
-    return {
-      id: activity.id,
-      type: 'activityNode',
-      position: { x: 100 * activity.order, y: 50 * activity.order },
-      data: { 
-        activity, 
-        isLocked,
-        icon,
-        onClick: () => !isLocked && !activity.completed && setSelectedActivity(activity)
-      },
-    };
-  });
+  const [program] = useState(sampleProgram);
+  const [selectedActivity, setSelectedActivity] = useState<Activity | null>(null);
 
-  // Create edges between activities based on order
-  const initialEdges: Edge[] = program.activities
-    .filter((_, index) => index < program.activities.length - 1)
-    .map((activity, index) => ({
-      id: `e-${activity.id}-${program.activities[index + 1].id}`,
-      source: activity.id,
-      target: program.activities[index + 1].id,
-      type: 'smoothstep',
-      animated: !program.activities[index + 1].completed, // animate if target not completed
-    }));
+  // Convert activities to nodes
+  const initialNodes: Node[] = useMemo(() => program.activities.map((activity) => {
+    const isUnlocked = activity.unlocked === true;
+    const isCompleted = activity.completed === true;
+
+    return {
+      id: activity.id.toString(),
+      position: { 
+        x: Math.random() * 400, 
+        y: Math.random() * 400 
+      },
+      data: { 
+        activity,
+        isLocked: !isUnlocked,
+        isCompleted,
+        onClick: () => isUnlocked ? setSelectedActivity(activity) : null
+      },
+      type: 'activityNode',
+    };
+  }), [program.activities]);
+
+  // Convert edges
+  const initialEdges: Edge[] = useMemo(() => program.edges.map((edge) => ({
+    id: `e${edge.source}-${edge.target}`,
+    source: edge.source,
+    target: edge.target,
+    style: { stroke: '#5EB47C', strokeWidth: 2 },
+    markerEnd: {
+      type: MarkerType.ArrowClosed,
+      color: '#5EB47C',
+    },
+  })), [program.edges]);
 
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
 
-  const onConnect = useCallback(
-    (params: Connection) => setEdges((eds) => addEdge(params, eds)),
-    [setEdges]
-  );
+  const nodeTypes = useMemo(() => ({ activityNode: ActivityNode }), []);
 
-  const handleNodeClick = (event: React.MouseEvent, node: Node) => {
-    if (node.data.isLocked || node.data.activity.completed) {
-      return;
-    }
-    setSelectedActivity(node.data.activity);
-  };
-
-  const handleCompleteActivity = (activityId: string) => {
-    onMarkComplete(activityId);
-    setSelectedActivity(null);
+  // Handle activity completion
+  const handleCompleteActivity = useCallback((activityId: number) => {
+    // Update the activity's completed status
+    const updatedProgram = { ...program };
+    const activityIndex = updatedProgram.activities.findIndex(a => a.id === activityId);
     
-    // Update nodes to reflect completed status and unlock next nodes
-    setNodes((nds) =>
-      nds.map((node) => {
-        if (node.id === activityId) {
-          // Mark this node as completed
+    if (activityIndex !== -1) {
+      updatedProgram.activities[activityIndex].completed = true;
+      
+      // Unlock next activities based on connections
+      const activityIdStr = activityId.toString();
+      const nextActivityIds = program.edges
+        .filter(edge => edge.source === activityIdStr)
+        .map(edge => edge.target);
+      
+      nextActivityIds.forEach(nextId => {
+        const nextActivityIndex = updatedProgram.activities.findIndex(a => a.id === parseInt(nextId));
+        if (nextActivityIndex !== -1) {
+          updatedProgram.activities[nextActivityIndex].unlocked = true;
+        }
+      });
+
+      // Update nodes to reflect the changes
+      setNodes(nodes.map(node => {
+        if (node.id === activityIdStr) {
           return {
             ...node,
             data: {
               ...node.data,
-              activity: {
-                ...node.data.activity,
-                completed: true
-              }
+              isCompleted: true
             }
           };
         }
         
-        // Check if this node should be unlocked because previous node was completed
-        const activity = program.activities.find(a => a.id === node.id);
-        const previousActivity = activity && program.activities.find(a => a.order === activity.order - 1);
-        
-        if (previousActivity && previousActivity.id === activityId) {
+        if (nextActivityIds.includes(node.id)) {
           return {
             ...node,
             data: {
@@ -175,122 +227,86 @@ const ProgramFlowView = ({ program, onMarkComplete }: ProgramFlowViewProps) => {
         }
         
         return node;
-      })
-    );
-  };
-
-  const renderActivityContent = () => {
-    if (!selectedActivity) return null;
-
-    switch (selectedActivity.type) {
-      case 'video':
-        return <VideoActivity activityContent={selectedActivity.content} />;
-      case 'audio':
-        return <AudioActivity activityContent={selectedActivity.content} />;
-      case 'journal':
-        return (
-          <JournalActivity 
-            activityId={selectedActivity.id} 
-            onComplete={() => handleCompleteActivity(selectedActivity.id)} 
-          />
-        );
-      case 'walk':
-        return (
-          <WalkActivity 
-            duration={selectedActivity.duration || 10} 
-            onComplete={() => handleCompleteActivity(selectedActivity.id)} 
-          />
-        );
-      case 'breathing':
-        return (
-          <BreathingActivity 
-            duration={selectedActivity.duration || 5} 
-            onComplete={() => handleCompleteActivity(selectedActivity.id)} 
-          />
-        );
-      default:
-        return <div>Unsupported activity type</div>;
+      }));
+      
+      // Close the activity modal/drawer
+      setSelectedActivity(null);
     }
-  };
-
-  const ActivityModal = () => {
-    if (!selectedActivity) return null;
-
-    if (isMobile) {
-      return (
-        <Drawer open={!!selectedActivity} onOpenChange={() => setSelectedActivity(null)}>
-          <DrawerContent className="max-h-[85vh]">
-            <DrawerHeader>
-              <DrawerTitle>{selectedActivity.title}</DrawerTitle>
-              <p className="text-sm text-muted-foreground mt-2">{selectedActivity.description}</p>
-            </DrawerHeader>
-            <div className="p-4">
-              {renderActivityContent()}
-            </div>
-            <DrawerFooter>
-              <Button 
-                onClick={() => handleCompleteActivity(selectedActivity.id)}
-                className="w-full bg-hopelink-accent hover:bg-hopelink-accent/90"
-              >
-                <Check className="mr-2 h-4 w-4" />
-                Mark as Completed
-              </Button>
-              <DrawerClose asChild>
-                <Button variant="outline" className="w-full">
-                  Close
-                </Button>
-              </DrawerClose>
-            </DrawerFooter>
-          </DrawerContent>
-        </Drawer>
-      );
-    }
-
-    return (
-      <Dialog open={!!selectedActivity} onOpenChange={() => setSelectedActivity(null)}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>{selectedActivity.title}</DialogTitle>
-            <p className="text-sm text-muted-foreground mt-2">{selectedActivity.description}</p>
-          </DialogHeader>
-          <div className="my-4">
-            {renderActivityContent()}
-          </div>
-          <div className="flex justify-end gap-2 mt-4">
-            <Button 
-              onClick={() => handleCompleteActivity(selectedActivity.id)}
-              className="bg-hopelink-accent hover:bg-hopelink-accent/90"
-            >
-              <Check className="mr-2 h-4 w-4" />
-              Mark as Completed
-            </Button>
-            <Button variant="outline" onClick={() => setSelectedActivity(null)}>
-              Close
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-    );
-  };
+  }, [program, nodes, setNodes]);
 
   return (
-    <div className="w-full h-[600px] border rounded-md bg-white">
+    <div className="w-full h-[500px] border rounded-lg overflow-hidden">
       <ReactFlow
         nodes={nodes}
         edges={edges}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
-        onConnect={onConnect}
-        onNodeClick={handleNodeClick}
-        connectionLineType={ConnectionLineType.SmoothStep}
         nodeTypes={nodeTypes}
         fitView
       >
         <Background />
         <Controls />
-        <MiniMap />
       </ReactFlow>
-      <ActivityModal />
+
+      {/* Activity Modal/Drawer */}
+      {selectedActivity && (
+        isMobile ? (
+          <Drawer open={!!selectedActivity} onOpenChange={() => setSelectedActivity(null)}>
+            <DrawerContent className="px-4">
+              <DrawerHeader>
+                <DrawerTitle>{selectedActivity.title}</DrawerTitle>
+              </DrawerHeader>
+              <div className="p-4">
+                <p className="text-muted-foreground mb-6">{selectedActivity.description}</p>
+                <div className="my-6">
+                  {getActivityComponent(selectedActivity)}
+                </div>
+              </div>
+              <DrawerFooter>
+                <Button 
+                  onClick={() => handleCompleteActivity(selectedActivity.id)}
+                  className="w-full bg-hopelink-accent hover:bg-hopelink-accent/90"
+                >
+                  <Check className="mr-2 h-4 w-4" />
+                  Mark as Completed
+                </Button>
+                <DrawerClose asChild>
+                  <Button variant="outline">Cancel</Button>
+                </DrawerClose>
+              </DrawerFooter>
+            </DrawerContent>
+          </Drawer>
+        ) : (
+          <Dialog open={!!selectedActivity} onOpenChange={() => setSelectedActivity(null)}>
+            <DialogContent className="sm:max-w-xl">
+              <DialogHeader>
+                <DialogTitle>{selectedActivity.title}</DialogTitle>
+              </DialogHeader>
+              <div className="p-4">
+                <p className="text-muted-foreground mb-6">{selectedActivity.description}</p>
+                <div className="my-6">
+                  {getActivityComponent(selectedActivity)}
+                </div>
+              </div>
+              <div className="flex justify-end space-x-4">
+                <Button 
+                  variant="outline" 
+                  onClick={() => setSelectedActivity(null)}
+                >
+                  Cancel
+                </Button>
+                <Button 
+                  onClick={() => handleCompleteActivity(selectedActivity.id)}
+                  className="bg-hopelink-accent hover:bg-hopelink-accent/90"
+                >
+                  <Check className="mr-2 h-4 w-4" />
+                  Mark as Completed
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+        )
+      )}
     </div>
   );
 };
