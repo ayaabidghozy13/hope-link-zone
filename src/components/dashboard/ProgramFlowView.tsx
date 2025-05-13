@@ -19,7 +19,7 @@ import { Program, Activity } from '@/types';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Drawer, DrawerClose, DrawerContent, DrawerFooter, DrawerHeader, DrawerTitle } from '@/components/ui/drawer';
 import { Button } from '@/components/ui/button';
-import { CheckCircle, LockClosed, Play, X } from 'lucide-react';
+import { Check, Lock, Play, X } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
 import ActivityItem from './ActivityItem';
 import VideoActivity from '../activities/VideoActivity';
@@ -55,8 +55,8 @@ const ActivityNode = ({ data }: { data: any }) => {
           <span className="font-medium text-sm">{activity.title}</span>
         </div>
         <div>
-          {isLocked && <LockClosed size={16} className="text-gray-500" />}
-          {isCompleted && <CheckCircle size={16} className="text-hopelink-accent" />}
+          {isLocked && <Lock size={16} className="text-gray-500" />}
+          {isCompleted && <Check size={16} className="text-hopelink-accent" />}
         </div>
       </div>
       <p className="text-xs text-muted-foreground line-clamp-2">{activity.description}</p>
@@ -232,7 +232,7 @@ const ProgramFlowView = ({ program, onMarkComplete }: ProgramFlowViewProps) => {
                 onClick={() => handleCompleteActivity(selectedActivity.id)}
                 className="w-full bg-hopelink-accent hover:bg-hopelink-accent/90"
               >
-                <CheckCircle className="mr-2 h-4 w-4" />
+                <Check className="mr-2 h-4 w-4" />
                 Mark as Completed
               </Button>
               <DrawerClose asChild>
@@ -261,7 +261,7 @@ const ProgramFlowView = ({ program, onMarkComplete }: ProgramFlowViewProps) => {
               onClick={() => handleCompleteActivity(selectedActivity.id)}
               className="bg-hopelink-accent hover:bg-hopelink-accent/90"
             >
-              <CheckCircle className="mr-2 h-4 w-4" />
+              <Check className="mr-2 h-4 w-4" />
               Mark as Completed
             </Button>
             <Button variant="outline" onClick={() => setSelectedActivity(null)}>
