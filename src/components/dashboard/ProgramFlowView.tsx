@@ -1,172 +1,210 @@
 
 import React, { useState, useCallback } from 'react';
-import { ReactFlow, Node, Edge, Controls, Background, Handle, Position } from '@xyflow/react';
+import {
+  ReactFlow,
+  Node,
+  Edge,
+  useNodesState,
+  useEdgesState,
+  addEdge,
+  Connection,
+  Background,
+  Controls,
+  MiniMap,
+} from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
+import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Activity, Program } from '@/types';
-import { CheckCircle, Lock, Play, Headphones, PenTool, Wind, MapPin } from 'lucide-react';
-import VideoActivity from '@/components/activities/VideoActivity';
-import AudioActivity from '@/components/activities/AudioActivity';
-import JournalActivity from '@/components/activities/JournalActivity';
-import BreathingActivity from '@/components/activities/BreathingActivity';
-import WalkActivity from '@/components/activities/WalkActivity';
+import { CheckCircle, Lock, Play } from 'lucide-react';
+import { Activity, ActivityType } from '@/types';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import VideoActivity from '../activities/VideoActivity';
+import AudioActivity from '../activities/AudioActivity';
+import JournalActivity from '../activities/JournalActivity';
+import WalkActivity from '../activities/WalkActivity';
+import BreathingActivity from '../activities/BreathingActivity';
 
 interface ProgramFlowViewProps {
-  program: Program;
-  onMarkComplete: (activityId: string) => void;
+  activities: Activity[];
+  onActivityComplete: (activityId: string) => void;
 }
 
 interface ActivityNodeData {
   activity: Activity;
-  onActivityClick: (activity: Activity) => void;
+  isLocked: boolean;
+  onActivityComplete: (activityId: string) => void;
 }
 
-const ActivityNode: React.FC<{ data: ActivityNodeData }> = ({ data }) => {
-  const { activity, onActivityClick } = data;
-  
-  const getIcon = () => {
-    switch (activity.type) {
-      case 'video': return <Play size={16} />;
-      case 'audio': return <Headphones size={16} />;
-      case 'journal': return <PenTool size={16} />;
-      case 'breathing': return <Wind size={16} />;
-      case 'walk': return <MapPin size={16} />;
-      default: return <Play size={16} />;
+const ActivityNode = ({ data }: { data: ActivityNodeData }) => {
+  const { activity, isLocked, onActivityComplete } = data;
+  const [isOpen, setIsOpen] = useState(false);
+
+  const getIcon = (type: ActivityType) => {
+    switch (type) {
+      case 'video':
+        return '🎥';
+      case 'audio':
+        return '🎵';
+      case 'journal':
+        return '✍️';
+      case 'breathing':
+        return '🌬️';
+      case 'walk':
+        return '🚶';
+      default:
+        return '📋';
     }
   };
 
-  const isUnlocked = !activity.position || activity.completed || activity.order === 1;
+  const handleComplete = () => {
+    onActivityComplete(activity.id);
+    setIsOpen(false);
+  };
+
+  const renderActivityContent = () => {
+    switch (activity.type) {
+      case 'video':
+        return <VideoActivity activityContent={activity.content || ''} />;
+      case 'audio':
+        return <AudioActivity activityContent={activity.content || ''} />;
+      case 'journal':
+        return <JournalActivity activityId={activity.id} onComplete={handleComplete} />;
+      case 'walk':
+        return <WalkActivity duration={activity.duration || 15} onComplete={handleComplete} />;
+      case 'breathing':
+        return <BreathingActivity duration={activity.duration || 5} onComplete={handleComplete} />;
+      default:
+        return <div>Activity content not available</div>;
+    }
+  };
 
   return (
-    <div className="relative">
-      <Handle type="target" position={Position.Top} className="w-2 h-2" />
-      <Card 
-        className={`min-w-[200px] cursor-pointer transition-all hover:shadow-md ${
-          activity.completed ? 'bg-green-50 border-green-200' : 
-          !isUnlocked ? 'bg-gray-50 border-gray-200 opacity-60' : 
-          'bg-white border-hopelink-primary/20 hover:border-hopelink-primary'
-        }`}
-        onClick={() => isUnlocked && onActivityClick(activity)}
-      >
-        <CardHeader className="pb-2">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              {getIcon()}
-              <CardTitle className="text-sm">{activity.title}</CardTitle>
+    <Dialog open={isOpen} onOpenChange={setIsOpen}>
+      <DialogTrigger asChild>
+        <Card 
+          className={`w-48 cursor-pointer transition-all duration-200 hover:shadow-md ${
+            isLocked ? 'opacity-50 cursor-not-allowed' : ''
+          } ${activity.completed ? 'border-hopelink-accent bg-hopelink-accent/10' : ''}`}
+          onClick={isLocked ? undefined : () => setIsOpen(true)}
+        >
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between">
+              <span className="text-2xl">{getIcon(activity.type)}</span>
+              {activity.completed ? (
+                <CheckCircle className="h-5 w-5 text-hopelink-accent" />
+              ) : isLocked ? (
+                <Lock className="h-5 w-5 text-gray-400" />
+              ) : (
+                <Play className="h-5 w-5 text-hopelink-primary" />
+              )}
             </div>
-            {activity.completed ? (
-              <CheckCircle className="text-green-500" size={16} />
-            ) : !isUnlocked ? (
-              <Lock className="text-gray-400" size={16} />
-            ) : null}
+            <CardTitle className="text-sm font-medium">{activity.title}</CardTitle>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <Badge variant={activity.completed ? "default" : isLocked ? "secondary" : "outline"} className="text-xs">
+              {activity.completed ? "Completed" : isLocked ? "Locked" : "Available"}
+            </Badge>
+          </CardContent>
+        </Card>
+      </DialogTrigger>
+      
+      {!isLocked && (
+        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <span className="text-2xl">{getIcon(activity.type)}</span>
+              {activity.title}
+            </DialogTitle>
+            <DialogDescription>{activity.description}</DialogDescription>
+          </DialogHeader>
+          <div className="mt-4">
+            {renderActivityContent()}
           </div>
-        </CardHeader>
-        <CardContent className="pt-0">
-          <CardDescription className="text-xs line-clamp-2">
-            {activity.description}
-          </CardDescription>
-          <Badge variant={activity.completed ? "default" : "secondary"} className="mt-2 text-xs">
-            {activity.completed ? "Completed" : !isUnlocked ? "Locked" : "Available"}
-          </Badge>
-        </CardContent>
-      </Card>
-      <Handle type="source" position={Position.Bottom} className="w-2 h-2" />
-    </div>
+          {!activity.completed && (activity.type === 'video' || activity.type === 'audio') && (
+            <div className="flex justify-end mt-4">
+              <Button onClick={handleComplete} className="hover-scale">
+                Mark as Complete
+              </Button>
+            </div>
+          )}
+        </DialogContent>
+      )}
+    </Dialog>
   );
 };
 
-const nodeTypes = {
-  activity: ActivityNode,
-};
-
-const ProgramFlowView: React.FC<ProgramFlowViewProps> = ({ program, onMarkComplete }) => {
-  const [selectedActivity, setSelectedActivity] = useState<Activity | null>(null);
-  const [sheetOpen, setSheetOpen] = useState(false);
-
-  const handleActivityClick = useCallback((activity: Activity) => {
-    setSelectedActivity(activity);
-    setSheetOpen(true);
-  }, []);
-
-  const handleActivityComplete = useCallback((activityId: string) => {
-    onMarkComplete(activityId);
-    setSheetOpen(false);
-    setSelectedActivity(null);
-  }, [onMarkComplete]);
-
-  // Convert activities to nodes
-  const nodes: Node[] = program.activities.map((activity, index) => ({
-    id: activity.id,
-    type: 'activity',
-    position: activity.position || { x: (index % 3) * 250, y: Math.floor(index / 3) * 200 },
-    data: {
-      activity,
-      onActivityClick: handleActivityClick,
-    },
-  }));
-
-  // Create edges based on activity order
-  const edges: Edge[] = [];
-  for (let i = 0; i < program.activities.length - 1; i++) {
-    edges.push({
-      id: `e${i}-${i+1}`,
-      source: program.activities[i].id,
-      target: program.activities[i + 1].id,
-      type: 'smoothstep',
-      animated: !program.activities[i].completed,
+const ProgramFlowView: React.FC<ProgramFlowViewProps> = ({ activities, onActivityComplete }) => {
+  // Create nodes from activities
+  const createNodes = useCallback(() => {
+    return activities.map((activity, index) => {
+      const isLocked = index > 0 && !activities[index - 1].completed;
+      
+      return {
+        id: activity.id,
+        type: 'default',
+        position: { 
+          x: (index % 3) * 250, 
+          y: Math.floor(index / 3) * 200 
+        },
+        data: {
+          activity,
+          isLocked,
+          onActivityComplete,
+        },
+      } as Node<ActivityNodeData>;
     });
-  }
+  }, [activities, onActivityComplete]);
 
-  const renderActivityContent = () => {
-    if (!selectedActivity) return null;
+  // Create edges between sequential activities
+  const createEdges = useCallback(() => {
+    return activities.slice(0, -1).map((activity, index) => ({
+      id: `e${activity.id}-${activities[index + 1].id}`,
+      source: activity.id,
+      target: activities[index + 1].id,
+      type: 'smoothstep',
+      animated: !activity.completed,
+      style: { 
+        stroke: activity.completed ? '#5EB47C' : '#d1d5db',
+        strokeWidth: 2,
+      },
+    })) as Edge[];
+  }, [activities]);
 
-    const commonProps = {
-      onComplete: () => handleActivityComplete(selectedActivity.id),
-    };
+  const [nodes, setNodes, onNodesChange] = useNodesState(createNodes());
+  const [edges, setEdges, onEdgesChange] = useEdgesState(createEdges());
 
-    switch (selectedActivity.type) {
-      case 'video':
-        return <VideoActivity {...commonProps} />;
-      case 'audio':
-        return <AudioActivity {...commonProps} />;
-      case 'journal':
-        return <JournalActivity activityId={selectedActivity.id} {...commonProps} />;
-      case 'breathing':
-        return <BreathingActivity duration={selectedActivity.duration || 5} {...commonProps} />;
-      case 'walk':
-        return <WalkActivity duration={selectedActivity.duration || 10} {...commonProps} />;
-      default:
-        return <div>Activity type not supported</div>;
-    }
+  const onConnect = useCallback(
+    (params: Connection) => setEdges((eds) => addEdge(params, eds)),
+    [setEdges],
+  );
+
+  // Update nodes when activities change
+  React.useEffect(() => {
+    setNodes(createNodes());
+    setEdges(createEdges());
+  }, [activities, createNodes, createEdges, setNodes, setEdges]);
+
+  const nodeTypes = {
+    default: ActivityNode,
   };
 
   return (
-    <div className="h-[600px] w-full">
+    <div className="h-[600px] w-full rounded-lg border bg-white">
       <ReactFlow
         nodes={nodes}
         edges={edges}
+        onNodesChange={onNodesChange}
+        onEdgesChange={onEdgesChange}
+        onConnect={onConnect}
         nodeTypes={nodeTypes}
         fitView
-        className="bg-gray-50"
+        attributionPosition="bottom-left"
       >
-        <Controls />
         <Background />
+        <Controls />
+        <MiniMap />
       </ReactFlow>
-
-      <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
-        <SheetContent className="sm:max-w-[500px]">
-          <SheetHeader>
-            <SheetTitle>{selectedActivity?.title}</SheetTitle>
-            <SheetDescription>{selectedActivity?.description}</SheetDescription>
-          </SheetHeader>
-          <div className="mt-6">
-            {renderActivityContent()}
-          </div>
-        </SheetContent>
-      </Sheet>
     </div>
   );
 };
