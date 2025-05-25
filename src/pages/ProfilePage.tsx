@@ -2,25 +2,21 @@
 import React from 'react';
 import DashboardLayout from '@/components/layouts/DashboardLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { User, Edit } from 'lucide-react';
-import ProfileCard from '@/components/dashboard/ProfileCard';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { User, Shield } from 'lucide-react';
+import ProfileUpdateForm from '@/components/profile/ProfileUpdateForm';
+import PasswordResetForm from '@/components/profile/PasswordResetForm';
 import { mockUserProfile } from '@/data/mockData';
 import { useToast } from '@/hooks/use-toast';
+import { UserProfile } from '@/types';
 
 const ProfilePage = () => {
   const { toast } = useToast();
   
-  const handleEditProfile = () => {
+  const handleUpdateProfile = (updatedProfile: Partial<UserProfile>) => {
     toast({
-      title: "Edit Profile",
-      description: "Profile editing will be available soon.",
-    });
-  };
-
-  const handleLogout = () => {
-    toast({
-      title: "Logged out",
-      description: "You have been logged out of your account.",
+      title: "Profile Updated",
+      description: "Your profile has been updated successfully.",
     });
   };
 
@@ -37,18 +33,35 @@ const ProfilePage = () => {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <p className="text-muted-foreground mb-4">
-            Keep your profile information up to date and manage your account settings.
-            You can also view your assigned doctor and request check-ins or send messages.
+          <p className="text-muted-foreground">
+            Keep your profile information up to date and manage your account security settings.
           </p>
         </CardContent>
       </Card>
       
-      <ProfileCard 
-        profile={mockUserProfile}
-        onEditProfile={handleEditProfile}
-        onLogout={handleLogout}
-      />
+      <Tabs defaultValue="profile" className="space-y-6">
+        <TabsList className="grid w-full grid-cols-2 lg:w-[400px]">
+          <TabsTrigger value="profile" className="flex items-center gap-2">
+            <User size={16} />
+            Update Profile
+          </TabsTrigger>
+          <TabsTrigger value="password" className="flex items-center gap-2">
+            <Shield size={16} />
+            Reset Password
+          </TabsTrigger>
+        </TabsList>
+        
+        <TabsContent value="profile" className="space-y-6">
+          <ProfileUpdateForm 
+            profile={mockUserProfile}
+            onUpdateProfile={handleUpdateProfile}
+          />
+        </TabsContent>
+        
+        <TabsContent value="password" className="space-y-6">
+          <PasswordResetForm />
+        </TabsContent>
+      </Tabs>
     </DashboardLayout>
   );
 };
